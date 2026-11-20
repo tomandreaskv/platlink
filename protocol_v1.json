@@ -1,0 +1,131 @@
+{
+  "version": "1.0.0",
+  "packet": {
+    "size_bytes": 8,
+    "header": "0xA5",
+    "endianness": "big",
+    "crc8": {
+      "polynomial": "0x07",
+      "init": "0x00",
+      "xor_out": "0x00",
+      "over_bytes": [0, 6]
+    },
+    "layout": [
+      { "index": 0, "name": "header", "size": 1, "description": "Start byte (0xA5)" },
+      { "index": 1, "name": "type_id", "size": 1, "description": "(format << 4) | category" },
+      { "index": 2, "name": "sub_id", "size": 1, "description": "Channel/endpoint ID or system subcommand/seq" },
+      { "index": [3, 6], "name": "payload", "size": 4, "description": "4-byte big-endian payload" },
+      { "index": 7, "name": "crc8", "size": 1, "description": "CRC-8 over bytes 0..6" }
+    ]
+  },
+  "formats": {
+    "0x1": { "name": "Digital", "key": "digital", "payload_type": "bool", "scale": 1, "description": "Boolean state (0=false, 1=true) in payload[3]" },
+    "0x2": { "name": "Analog8", "key": "analog8", "payload_type": "uint8", "scale": 1, "description": "Unsigned 8-bit value (0..255) in payload[3]" },
+    "0x3": { "name": "Fixed32", "key": "fixed32", "payload_type": "int32", "scale": 100, "description": "Signed 32-bit integer divided by 100" },
+    "0x4": { "name": "Raw32", "key": "raw32", "payload_type": "uint32", "scale": 1, "description": "Unsigned 32-bit integer" },
+    "0x5": { "name": "Int32", "key": "int32", "payload_type": "int32", "scale": 1, "description": "Signed 32-bit integer" },
+    "0xF": { "name": "System", "key": "system", "payload_type": "uint32", "scale": 1, "description": "System and control messages (0xF0..0xFF)" }
+  },
+  "categories": {
+    "0x1": { "name": "Temperatur", "key": "temp", "unit": "°C", "default_format": "0x3" },
+    "0x2": { "name": "Fuktighet", "key": "humidity", "unit": "%", "default_format": "0x3" },
+    "0x3": { "name": "Lys", "key": "light", "unit": "lux", "default_format": "0x4" },
+    "0x4": { "name": "pH", "key": "ph", "unit": "pH", "default_format": "0x3" },
+    "0x5": { "name": "EC", "key": "ec", "unit": "µS/cm", "default_format": "0x3" },
+    "0x6": { "name": "Vannstand", "key": "water_level", "unit": "cm", "default_format": "0x4" },
+    "0x7": { "name": "Trykk", "key": "pressure", "unit": "hPa", "default_format": "0x3" },
+    "0xE": { "name": "Utvidelse", "key": "custom", "unit": "", "default_format": "0x4" },
+    "0xF": { "name": "System", "key": "system", "unit": "", "default_format": "0xF" }
+  },
+  "system_messages": {
+    "0xF0": { "name": "Heartbeat", "key": "heartbeat", "description": "Uptime in seconds (uint32)" },
+    "0xF4": { "name": "Discovery", "key": "discovery", "description": "Node announcement / capability info" },
+    "0xFC": { "name": "OTA Control", "key": "ota_ctrl", "description": "SubID: 0x01=Init (size), 0x03=Verify (crc32)" },
+    "0xFD": { "name": "OTA Data", "key": "ota_data", "description": "SubID: sequence/chunk index, 4-byte firmware chunk" },
+    "0xFF": { "name": "Reset", "key": "reset", "description": "Node reset command" }
+  },
+  "test_vectors": [
+    {
+      "name": "Temperature 22.53 C (Fixed32)",
+      "hex": "A53101000008CD3C",
+      "valid": true,
+      "type_id": "0x31",
+      "sub_id": "0x01",
+      "format": "0x3",
+      "category": "0x1",
+      "decoded_value": 22.53,
+      "unit": "°C"
+    },
+    {
+      "name": "Negative Temperature -10.50 C (Fixed32)",
+      "hex": "A53101FFFFFBE671",
+      "valid": true,
+      "type_id": "0x31",
+      "sub_id": "0x01",
+      "format": "0x3",
+      "category": "0x1",
+      "decoded_value": -10.5,
+      "unit": "°C"
+    },
+    {
+      "name": "pH 6.20 (Fixed32)",
+      "hex": "A534020000026CBF",
+      "valid": true,
+      "type_id": "0x34",
+      "sub_id": "0x02",
+      "format": "0x3",
+      "category": "0x4",
+      "decoded_value": 6.2,
+      "unit": "pH"
+    },
+    {
+      "name": "EC 1250.50 uS/cm (Fixed32)",
+      "hex": "A535030001E8AA05",
+      "valid": true,
+      "type_id": "0x35",
+      "sub_id": "0x03",
+      "format": "0x3",
+      "category": "0x5",
+      "decoded_value": 1250.5,
+      "unit": "µS/cm"
+    },
+    {
+      "name": "Water level 45 cm (Raw32)",
+      "hex": "A546040000002D7C",
+      "valid": true,
+      "type_id": "0x46",
+      "sub_id": "0x04",
+      "format": "0x4",
+      "category": "0x6",
+      "decoded_value": 45,
+      "unit": "cm"
+    },
+    {
+      "name": "Digital ON (0x1F)",
+      "hex": "A51F05000000017A",
+      "valid": true,
+      "type_id": "0x1F",
+      "sub_id": "0x05",
+      "format": "0x1",
+      "category": "0xF",
+      "decoded_value": true,
+      "unit": ""
+    },
+    {
+      "name": "System Heartbeat 3600s (0xF0)",
+      "hex": "A5F00100000E1059",
+      "valid": true,
+      "type_id": "0xF0",
+      "sub_id": "0x01",
+      "format": "0xF",
+      "category": "0x0",
+      "decoded_value": 3600,
+      "unit": ""
+    },
+    {
+      "name": "Invalid CRC8",
+      "hex": "A53101000008CD00",
+      "valid": false
+    }
+  ]
+}
