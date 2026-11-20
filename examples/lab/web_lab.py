@@ -269,6 +269,20 @@ class PlatLinkLabBridge:
         t = threading.Thread(target=self._rx_loop, daemon=True)
         t.start()
 
+    def _sendall_with_timeout(self, data: bytes, timeout_s: float) -> None:
+        if self._sock is None:
+            raise RuntimeError("Ikke tilkoblet TCP-buss.")
+        with self._send_lock:
+            prev_timeout = self._sock.gettimeout()
+            try:
+                self._sock.settimeout(timeout_s)
+                self._sock.sendall(data)
+            finally:
+                try:
+                    self._sock.settimeout(prev_timeout)
+                except OSError:
+                    pass
+
     def send_raw(
         self,
         raw: bytes,
@@ -278,8 +292,7 @@ class PlatLinkLabBridge:
     ) -> None:
         if self._sock is None:
             raise RuntimeError("Ikke tilkoblet TCP-buss.")
-        with self._send_lock:
-            self._sock.sendall(raw)
+        self._sendall_with_timeout(raw, timeout_s=5.0)
         with self._events_lock:
             self.stats["tx"] += 1
         if not record_event:
@@ -412,6 +425,9 @@ class PlatLinkLabBridge:
             raw_pkt = ch_item.packet.to_bytes()
             tx_buf.extend(raw_pkt)
 
+            with self._events_lock:
+                self.reassembler.observe_packet(ch_item.packet)
+
             if log_each_chunk:
                 ev = decode_packet_info(raw_pkt, ch_item.packet, "TX", batch_id=batch_id)
                 ev["note"] = f"{label} DATA seq={ch_item.sub_id}"
@@ -420,8 +436,7 @@ class PlatLinkLabBridge:
             if len(tx_buf) >= 16384 or idx == n_chunks:
                 if self._sock is None:
                     raise RuntimeError("Ikke tilkoblet TCP-buss.")
-                with self._send_lock:
-                    self._sock.sendall(bytes(tx_buf))
+                self._sendall_with_timeout(bytes(tx_buf), timeout_s=10.0)
                 n_sent_pkts = len(tx_buf) // PACKET_SIZE
                 with self._events_lock:
                     self.stats["tx"] += n_sent_pkts
@@ -709,7 +724,12 @@ def make_handler(bridge: PlatLinkLabBridge):
                     fw_size = int(data.get("size", 262144))
                     ver = bridge.next_fw_version()
                     img = build_realistic_firmware_image(version=ver, total_size=fw_size)
-                    bridge.run_transfer_async(img, f"SIM-OTA(v{ver})", corrupt_crc=False, step_delay=0.0005)
+                    bridge.run_transfer_async(
+                        img,
+                        f"SIM-OTA(v{ver})",
+                        corrupt_crc=False,
+                        step_delay=0.0005,
+                    )
                     self._send_json(
                         200,
                         {"message": f"Simulerer firmware-oppdatering v{ver} ({len(img)} byte)..."},
