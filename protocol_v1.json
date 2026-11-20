@@ -47,7 +47,7 @@
   "test_vectors": [
     {
       "name": "Temperature 22.53 C (Fixed32)",
-      "hex": "A53101000008CD3C",
+      "hex": "A53101000008CDAA",
       "valid": true,
       "type_id": "0x31",
       "sub_id": "0x01",
@@ -58,7 +58,7 @@
     },
     {
       "name": "Negative Temperature -10.50 C (Fixed32)",
-      "hex": "A53101FFFFFBE671",
+      "hex": "A53101FFFFFBE6AA",
       "valid": true,
       "type_id": "0x31",
       "sub_id": "0x01",
@@ -69,7 +69,7 @@
     },
     {
       "name": "pH 6.20 (Fixed32)",
-      "hex": "A534020000026CBF",
+      "hex": "A534020000026C6D",
       "valid": true,
       "type_id": "0x34",
       "sub_id": "0x02",
@@ -80,7 +80,7 @@
     },
     {
       "name": "EC 1250.50 uS/cm (Fixed32)",
-      "hex": "A535030001E8AA05",
+      "hex": "A535030001E87AEE",
       "valid": true,
       "type_id": "0x35",
       "sub_id": "0x03",
@@ -91,7 +91,7 @@
     },
     {
       "name": "Water level 45 cm (Raw32)",
-      "hex": "A546040000002D7C",
+      "hex": "A546040000002D4D",
       "valid": true,
       "type_id": "0x46",
       "sub_id": "0x04",
@@ -102,7 +102,7 @@
     },
     {
       "name": "Digital ON (0x1F)",
-      "hex": "A51F05000000017A",
+      "hex": "A51F050000000165",
       "valid": true,
       "type_id": "0x1F",
       "sub_id": "0x05",
@@ -113,7 +113,7 @@
     },
     {
       "name": "System Heartbeat 3600s (0xF0)",
-      "hex": "A5F00100000E1059",
+      "hex": "A5F00100000E107A",
       "valid": true,
       "type_id": "0xF0",
       "sub_id": "0x01",

@@ -1,0 +1,37 @@
+# Generelt / OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# C / build-artefakter
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+c/build/
+c/*.d
+
+# Go
+*.test
+*.prof
+go/vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+.venv/
+venv/

@@ -26,7 +26,7 @@ static void test_protocol_vectors(void) {
     const test_vector_t vectors[] = {
         {
             .name = "Temperature 22.53 C (Fixed32)",
-            .raw = {0xA5, 0x31, 0x01, 0x00, 0x00, 0x08, 0xCD, 0x3C},
+            .raw = {0xA5, 0x31, 0x01, 0x00, 0x00, 0x08, 0xCD, 0xAA},
             .valid = true,
             .expected_type_id = 0x31,
             .expected_sub_id = 0x01,
@@ -37,7 +37,7 @@ static void test_protocol_vectors(void) {
         },
         {
             .name = "Negative Temperature -10.50 C (Fixed32)",
-            .raw = {0xA5, 0x31, 0x01, 0xFF, 0xFF, 0xFB, 0xE6, 0x71},
+            .raw = {0xA5, 0x31, 0x01, 0xFF, 0xFF, 0xFB, 0xE6, 0xAA},
             .valid = true,
             .expected_type_id = 0x31,
             .expected_sub_id = 0x01,
@@ -48,7 +48,7 @@ static void test_protocol_vectors(void) {
         },
         {
             .name = "pH 6.20 (Fixed32)",
-            .raw = {0xA5, 0x34, 0x02, 0x00, 0x00, 0x02, 0x6C, 0xCB},
+            .raw = {0xA5, 0x34, 0x02, 0x00, 0x00, 0x02, 0x6C, 0x6D},
             .valid = true,
             .expected_type_id = 0x34,
             .expected_sub_id = 0x02,
@@ -59,7 +59,7 @@ static void test_protocol_vectors(void) {
         },
         {
             .name = "EC 1250.50 uS/cm (Fixed32)",
-            .raw = {0xA5, 0x35, 0x03, 0x00, 0x01, 0xE8, 0xAA, 0x05},
+            .raw = {0xA5, 0x35, 0x03, 0x00, 0x01, 0xE8, 0x7A, 0xEE},
             .valid = true,
             .expected_type_id = 0x35,
             .expected_sub_id = 0x03,
@@ -70,7 +70,7 @@ static void test_protocol_vectors(void) {
         },
         {
             .name = "Water level 45 cm (Raw32)",
-            .raw = {0xA5, 0x46, 0x04, 0x00, 0x00, 0x00, 0x2D, 0x7C},
+            .raw = {0xA5, 0x46, 0x04, 0x00, 0x00, 0x00, 0x2D, 0x4D},
             .valid = true,
             .expected_type_id = 0x46,
             .expected_sub_id = 0x04,
@@ -81,7 +81,7 @@ static void test_protocol_vectors(void) {
         },
         {
             .name = "Digital ON (0x1F)",
-            .raw = {0xA5, 0x1F, 0x05, 0x00, 0x00, 0x00, 0x01, 0x7A},
+            .raw = {0xA5, 0x1F, 0x05, 0x00, 0x00, 0x00, 0x01, 0x65},
             .valid = true,
             .expected_type_id = 0x1F,
             .expected_sub_id = 0x05,
@@ -92,7 +92,7 @@ static void test_protocol_vectors(void) {
         },
         {
             .name = "System Heartbeat 3600s (0xF0)",
-            .raw = {0xA5, 0xF0, 0x01, 0x00, 0x00, 0x0E, 0x10, 0x59},
+            .raw = {0xA5, 0xF0, 0x01, 0x00, 0x00, 0x0E, 0x10, 0x7A},
             .valid = true,
             .expected_type_id = PLATLINK_SYS_HEARTBEAT,
             .expected_sub_id = 0x01,
@@ -153,17 +153,17 @@ static void test_packet_creators(void) {
     assert(raw[0] == 0xA5U);
     assert(raw[1] == 0x31U);
     assert(raw[2] == 0x01U);
-    assert(raw[7] == 0x3CU);
+    assert(raw[7] == 0xAAU);
 
     platlink_create_fixed32_scaled(&pkt, PLATLINK_CAT_TEMPERATURE, 0x01U, -1050);
     platlink_to_bytes(&pkt, raw);
     assert(platlink_validate_bytes(raw));
-    assert(raw[7] == 0x71U);
+    assert(raw[7] == 0xAAU);
 
     platlink_create_u32(&pkt, PLATLINK_SYS_HEARTBEAT, 0x01U, 3600U);
     platlink_to_bytes(&pkt, raw);
     assert(platlink_validate_bytes(raw));
-    assert(raw[7] == 0x59U);
+    assert(raw[7] == 0x7AU);
 }
 
 int main(void) {
