@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PlatLink v1.0 – Live Lab</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-2: #0b1220;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --err: #ef4444;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    .stats { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+    .stats b { color: var(--text); }
+    main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
+      padding: 16px 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 14px;
+    }
+    .card h2 { margin: 0 0 10px 0; font-size: 15px; color: var(--accent); }
+    label { display: block; font-size: 12px; color: var(--muted); margin-top: 8px; margin-bottom: 4px; }
+    select, input, textarea {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+    }
+    textarea { min-height: 58px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .row { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; align-items: center; }
+    button {
+      padding: 7px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.secondary { background: #334155; }
+    button.warn { background: #b45309; }
+    button.danger { background: #b91c1c; }
+    button.toggle-off { background: #334155; color: #f8fafc; }
+    button.toggle-on { background: #15803d; color: #ffffff; }
+    button.mini { padding: 3px 8px; font-size: 11px; background: #1e3a8a; }
+    .relays { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+    .relay-box {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+    }
+    .badge-on { color: var(--ok); font-weight: 700; }
+    .badge-off { color: var(--muted); }
+    .reasm-box {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+    }
+    .reasm-meta { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); margin-bottom: 8px; }
+    .reasm-meta b { color: var(--text); }
+    .reasm-ok { color: var(--ok) !important; font-weight: 700; }
+    .reasm-err { color: #fca5a5 !important; font-weight: 700; }
+    pre.dump {
+      margin: 6px 0 0 0;
+      padding: 8px;
+      background: #060a13;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 120px;
+      overflow-y: auto;
+      color: #e2e8f0;
+    }
+    .table-wrap { overflow-x: auto; max-height: 54vh; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #263349; white-space: nowrap; }
+    th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); z-index: 2; }
+    code.hex { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+    tr.kind-ok td:nth-child(2) { color: var(--ok); font-weight: 600; }
+    tr.kind-error { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
+    tr.kind-noise { background: rgba(245, 158, 11, 0.12); color: #fcd34d; }
+    tr.batch-summary {
+      background: rgba(56, 189, 248, 0.14);
+      border-top: 1px solid rgba(56, 189, 248, 0.45);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.45);
+      font-weight: 600;
+    }
+    tr.batch-child { background: rgba(15, 23, 42, 0.65); }
+    tr.batch-child td:first-child { padding-left: 20px; color: var(--muted); }
+    tr.hidden-row { display: none; }
+    #status-msg { font-size: 12px; color: var(--accent); min-height: 18px; margin-top: 8px; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PlatLink v1.0 – Live Buss-Lab</h1>
+    <div class="stats">
+      <span>Gyldige pakker: <b id="st-ok">0</b></span>
+      <span>Sendte (TX): <b id="st-tx">0</b></span>
+      <span>CRC-feil: <b id="st-crc">0</b></span>
+      <span>Støybyte: <b id="st-noise">0</b></span>
+    </div>
+  </header>
+
+  <main>
+    <div>
+      <div class="card">
+        <h2>Bussmodus og noder</h2>
+        <div class="row" style="margin-top:0">
+          <button id="mode-toggle" class="toggle-off" onclick="toggleAutoMode()">
+            Auto-trafikk: AV (Manuell)
+          </button>
+          <button class="secondary" onclick="sendSampleBurst()">Trigger 1 måling</button>
+        </div>
+        <div class="hint">Veksle mellom rolig manuell modus og periodisk sensor-/støytrafikk.</div>
+      </div>
+
+      <div class="card">
+        <h2>Relékanaler (Digital 0x1F)</h2>
+        <div class="relays" id="relays"></div>
+        <div class="row">
+          <button class="danger" onclick="sendReset()">Send Reset (0xFF)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Kort melding (1–4 tegn)</h2>
+        <label for="short-msg">ASCII-tekst (maks 4 tegn, f.eks. PING / SYNC / OK)</label>
+        <input id="short-msg" type="text" maxlength="4" value="PING" />
+        <label for="short-sub">SubID (heksadesimal, f.eks. 01)</label>
+        <input id="short-sub" type="text" value="01" />
+        <div class="row">
+          <button onclick="sendShortMsg()">Send kort melding</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Oppdater datalogger (Config / OTA / Fil)</h2>
+        <label for="fw-size-select">Firmware-størrelse for eksempel-OTA</label>
+        <select id="fw-size-select">
+          <option value="32768">32 KB (8 192 chunks)</option>
+          <option value="262144" selected>256 KB (65 536 chunks)</option>
+          <option value="655360">640 KB (163 840 chunks)</option>
+        </select>
+        <label for="payload-text">Config-JSON eller tekst som deles opp i 4B-chunks</label>
+        <textarea id="payload-text">{"interval_s":10,"target_ph":6.0,"log_mode":"burst"}</textarea>
+        <label for="file-input">Eller velg en fil fra disk (config eller OTA-bilde)</label>
+        <input id="file-input" type="file" />
+        <div class="row">
+          <button onclick="sendTransfer('config')">Send Config</button>
+          <button onclick="sendExampleFirmware(false)">Send eksempel firmware</button>
+          <button class="secondary" onclick="simulateFirmwareUpdate()">Simuler firmware-oppdatering</button>
+          <button class="warn" onclick="sendExampleFirmware(true)">Eksempel m/ feil CRC32</button>
+          <button class="secondary" onclick="sendFile()">Send valgt fil</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Måling, rå hex og feilscenarioer</h2>
+        <label for="cat-select">Kategori (Fixed32)</label>
+        <select id="cat-select">
+          <option value="temperature">Temperatur (°C)</option>
+          <option value="humidity">Fukt (%)</option>
+          <option value="light">Lys</option>
+          <option value="ph">pH</option>
+          <option value="ec">EC (µS/cm)</option>
+          <option value="water_level">Vannstand (cm)</option>
+          <option value="pressure">Trykk</option>
+        </select>
+        <div class="row">
+          <div style="flex:1">
+            <label for="val-input">Verdi</label>
+            <input id="val-input" type="number" step="0.01" value="22.53" />
+          </div>
+          <div style="width:90px">
+            <label for="sub-input">SubID</label>
+            <input id="sub-input" type="text" value="01" />
+          </div>
+        </div>
+        <div class="row">
+          <button onclick="sendFixed32()">Send Fixed32</button>
+          <button class="warn" onclick="sendBadCrc()">Feil CRC-8</button>
+          <button class="warn" onclick="sendNoise()">Linjestøy</button>
+        </div>
+        <label for="hex-input">Egendefinert 8-byte hex (16 tegn)</label>
+        <input id="hex-input" type="text" value="A53101000008CDAA" />
+        <div class="row">
+          <button class="secondary" onclick="sendHex()">Send Hex</button>
+          <button class="secondary" onclick="clearLog()">Tøm logg</button>
+          <button class="secondary" onclick="archiveLog()">Arkiver logg</button>
+        </div>
+        <div id="status-msg"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Datalogger – sammensatt mottak og partisjonsstatus</h2>
+        <div class="reasm-box">
+          <div class="reasm-meta">
+            <span>Aktiv partisjon: <b id="rm-part">ota_0</b></span>
+            <span>Firmware: <b id="rm-fw">v1.0.0</b></span>
+            <span>Logger-tilbakemelding: <b id="rm-report">Ingen rapport ennå</b></span>
+          </div>
+          <div class="reasm-meta">
+            <span>Status: <b id="rm-status">Klar (venter på OTA/config)</b></span>
+            <span>Byte: <b id="rm-bytes">0 B</b></span>
+            <span>Chunks: <b id="rm-chunks">0</b></span>
+            <span>CRC32: <b id="rm-crc">-</b></span>
+          </div>
+          <label style="margin-top:0">Dekodet innhold & oppdateringsforløp (tolket av datalogger)</label>
+          <pre class="dump" id="rm-decoded">(ingen data mottatt ennå)</pre>
+          <label>Rå header / første byte i sammensatt buffer (hex)</label>
+          <pre class="dump" id="rm-hex">(tom)</pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Live buss-trafikk</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tid</th>
+                <th>Retn.</th>
+                <th>Hex</th>
+                <th>TypeID</th>
+                <th>Format</th>
+                <th>Kategori</th>
+                <th>SubID</th>
+                <th>Dekodet / Melding</th>
+              </tr>
+            </thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let lastId = 0;
+    let currentAutoMode = false;
+    const expandedBatches = new Set();
+    const logBody = document.getElementById("log-body");
+    const statusMsg = document.getElementById("status-msg");
+    const modeToggleBtn = document.getElementById("mode-toggle");
+
+    function setStatus(msg) {
+      statusMsg.textContent = msg;
+    }
+
+    function renderAutoMode(enabled) {
+      currentAutoMode = Boolean(enabled);
+      if (currentAutoMode) {
+        modeToggleBtn.textContent = "Auto-trafikk: PÅ (Klikk for manuell)";
+        modeToggleBtn.className = "toggle-on";
+      } else {
+        modeToggleBtn.textContent = "Auto-trafikk: AV (Klikk for auto)";
+        modeToggleBtn.className = "toggle-off";
+      }
+    }
+
+    function renderReassembled(r) {
+      if (!r) return;
+      document.getElementById("rm-part").textContent = r.running_partition || "ota_0";
+      document.getElementById("rm-fw").textContent = "v" + (r.firmware_version || "1.0.0");
+      document.getElementById("rm-report").textContent = r.last_logger_report || "Ingen rapport ennå";
+
+      const stEl = document.getElementById("rm-status");
+      stEl.textContent = r.status || "Klar";
+      stEl.className = r.crc_ok === true ? "reasm-ok" : (r.crc_ok === false ? "reasm-err" : "");
+
+      const expStr = r.expected_size !== null && r.expected_size !== undefined ? ` / ${r.expected_size} B` : "";
+      document.getElementById("rm-bytes").textContent = `${r.received_len || 0} B${expStr}`;
+      document.getElementById("rm-chunks").textContent = r.chunk_count || 0;
+
+      const crcEl = document.getElementById("rm-crc");
+      if (r.actual_crc32) {
+        crcEl.textContent = r.expected_crc32
+          ? `${r.actual_crc32} (forventet ${r.expected_crc32})`
+          : r.actual_crc32;
+      } else {
+        crcEl.textContent = "-";
+      }
+
+      document.getElementById("rm-decoded").textContent =
+        r.decoded_preview && r.decoded_preview.length > 0 ? r.decoded_preview : "(ingen data mottatt ennå)";
+      document.getElementById("rm-hex").textContent =
+        r.hex_preview && r.hex_preview.length > 0 ? r.hex_preview : "(tom)";
+    }
+
+    async function postAction(payload) {
+      const res = await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus("Feil: " + (data.error || "ukjent feil"));
+      } else {
+        setStatus(data.message || "Sendt.");
+      }
+    }
+
+    function toggleAutoMode() {
+      postAction({ action: "set_auto_mode", enabled: !currentAutoMode });
+    }
+
+    function setRelay(ch, state) {
+      postAction({ action: "relay", channel: ch, state: state });
+    }
+
+    function sendReset() {
+      postAction({ action: "reset", sub_id: 0 });
+    }
+
+    function sendSampleBurst() {
+      postAction({ action: "sample_burst" });
+    }
+
+    function sendShortMsg() {
+      postAction({
+        action: "short_text",
+        text: document.getElementById("short-msg").value,
+        sub_id: document.getElementById("short-sub").value.trim(),
+      });
+    }
+
+    function sendTransfer(mode) {
+      postAction({
+        action: "transfer_text",
+        mode: mode,
+        text: document.getElementById("payload-text").value,
+      });
+    }
+
+    function getSelectedFwSize() {
+      return parseInt(document.getElementById("fw-size-select").value, 10) || 262144;
+    }
+
+    function sendExampleFirmware(corruptCrc) {
+      postAction({
+        action: "ota_fw",
+        size: getSelectedFwSize(),
+        corrupt_crc: Boolean(corruptCrc),
+      });
+    }
+
+    function simulateFirmwareUpdate() {
+      postAction({
+        action: "simulate_ota",
+        size: getSelectedFwSize(),
+      });
+    }
+
+    function sendFile() {
+      const fileInput = document.getElementById("file-input");
+      if (!fileInput.files || fileInput.files.length === 0) {
+        setStatus("Velg en fil først.");
+        return;
+      }
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        const bytes = new Uint8Array(reader.result);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        postAction({
+          action: "transfer_base64",
+          filename: file.name,
+          data_b64: btoa(binary),
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function sendFixed32() {
+      postAction({
+        action: "fixed32",
+        category: document.getElementById("cat-select").value,
+        value: parseFloat(document.getElementById("val-input").value),
+        sub_id: document.getElementById("sub-input").value.trim(),
+      });
+    }
+
+    function sendBadCrc() {
+      postAction({ action: "bad_crc" });
+    }
+
+    function sendNoise() {
+      postAction({ action: "noise" });
+    }
+
+    function sendHex() {
+      postAction({ action: "hex", hex: document.getElementById("hex-input").value.trim() });
+    }
+
+    async function clearLog() {
+      logBody.innerHTML = "";
+      expandedBatches.clear();
+      lastId = 0;
+      await postAction({ action: "clear" });
+    }
+
+    async function archiveLog() {
+      logBody.innerHTML = "";
+      expandedBatches.clear();
+      lastId = 0;
+      await postAction({ action: "archive" });
+    }
+
+    function toggleBatch(batchId) {
+      if (expandedBatches.has(batchId)) {
+        expandedBatches.delete(batchId);
+      } else {
+        expandedBatches.add(batchId);
+      }
+      const isExpanded = expandedBatches.has(batchId);
+      const children = logBody.querySelectorAll(`tr.batch-child[data-batch="${batchId}"]`);
+      children.forEach((row) => {
+        row.classList.toggle("hidden-row", !isExpanded);
+      });
+      const btn = logBody.querySelector(`button[data-toggle-batch="${batchId}"]`);
+      if (btn) {
+        btn.textContent = isExpanded ? "Skjul chunks" : "Vis chunks";
+      }
+    }
+
+    function renderRelays(relays) {
+      const container = document.getElementById("relays");
+      container.innerHTML = "";
+      Object.keys(relays).sort().forEach((ch) => {
+        const isOn = Boolean(relays[ch]);
+        const box = document.createElement("div");
+        box.className = "relay-box";
+        box.innerHTML = `
+          <div>
+            <div>Kanal ${ch}</div>
+            <span class="${isOn ? "badge-on" : "badge-off"}">${isOn ? "PÅ (1)" : "AV (0)"}</span>
+          </div>
+          <div>
+            <button onclick="setRelay(${ch}, true)">På</button>
+            <button class="secondary" onclick="setRelay(${ch}, false)">Av</button>
+          </div>
+        `;
+        container.appendChild(box);
+      });
+    }
+
+    function appendEvent(ev) {
+      if (ev.kind === "batch_end") {
+        const existing = logBody.querySelector(`tr.batch-summary[data-batch="${ev.batch_id}"]`);
+        if (existing) {
+          existing.children[7].innerHTML = `${ev.decoded} <button class="mini" data-toggle-batch="${ev.batch_id}" onclick="toggleBatch('${ev.batch_id}')">Vis chunks</button>`;
+        }
+        return;
+      }
+
+      const tr = document.createElement("tr");
+
+      if (ev.kind === "batch_start") {
+        tr.className = "batch-summary";
+        tr.dataset.batch = ev.batch_id;
+        tr.innerHTML = `
+          <td>${ev.ts}</td>
+          <td>${ev.dir}</td>
+          <td><code class="hex">${ev.batch_id}</code></td>
+          <td>${ev.type_id}</td>
+          <td>${ev.format}</td>
+          <td>${ev.category}</td>
+          <td>${ev.sub_id}</td>
+          <td>${ev.decoded} <button class="mini" data-toggle-batch="${ev.batch_id}" onclick="toggleBatch('${ev.batch_id}')">Vis chunks</button></td>
+        `;
+        logBody.appendChild(tr);
+      } else if (ev.batch_id) {
+        const isExpanded = expandedBatches.has(ev.batch_id);
+        tr.className = "batch-child kind-" + (ev.kind || "ok") + (isExpanded ? "" : " hidden-row");
+        tr.dataset.batch = ev.batch_id;
+        tr.innerHTML = `
+          <td>${ev.ts}</td>
+          <td>${ev.dir}</td>
+          <td><code class="hex">${ev.hex}</code></td>
+          <td>${ev.type_id}</td>
+          <td>${ev.format}</td>
+          <td>${ev.category}</td>
+          <td>${ev.sub_id}</td>
+          <td>${ev.decoded}</td>
+        `;
+        logBody.appendChild(tr);
+      } else {
+        tr.className = "kind-" + (ev.kind || "ok");
+        tr.innerHTML = `
+          <td>${ev.ts}</td>
+          <td>${ev.dir}</td>
+          <td><code class="hex">${ev.hex}</code></td>
+          <td>${ev.type_id}</td>
+          <td>${ev.format}</td>
+          <td>${ev.category}</td>
+          <td>${ev.sub_id}</td>
+          <td>${ev.decoded}</td>
+        `;
+        logBody.appendChild(tr);
+      }
+
+      while (logBody.children.length > 500) {
+        logBody.removeChild(logBody.firstChild);
+      }
+      logBody.parentElement.scrollTop = logBody.parentElement.scrollHeight;
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/events?since=${lastId}`);
+        if (res.ok) {
+          const data = await res.json();
+          lastId = data.last_id;
+          renderAutoMode(data.auto_mode);
+          renderReassembled(data.reassembled);
+          document.getElementById("st-ok").textContent = data.stats.ok;
+          document.getElementById("st-tx").textContent = data.stats.tx;
+          document.getElementById("st-crc").textContent = data.stats.crc_err;
+          document.getElementById("st-noise").textContent = data.stats.noise_bytes;
+          renderRelays(data.relays);
+          data.events.forEach(appendEvent);
+        }
+      } catch (_) {}
+      setTimeout(poll, 300);
+    }
+
+    poll();
+  </script>
+</body>
+</html>
