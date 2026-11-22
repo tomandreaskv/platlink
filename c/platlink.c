@@ -143,15 +143,6 @@ bool platlink_validate_bytes(const uint8_t raw[PLATLINK_PACKET_SIZE]) {
     return expected == raw[PLATLINK_PACKET_SIZE - 1U];
 }
 
-/* Sjekker header (0xA5) og CRC-8 (byte 0..6 mot byte 7) på rå 8-byte buffer */
-bool platlink_validate_bytes(const uint8_t raw[PLATLINK_PACKET_SIZE]) {
-    if (raw == NULL || raw[0] != PLATLINK_HEADER) {
-        return false;
-    }
-    uint8_t expected = platlink_crc8(raw, PLATLINK_PACKET_SIZE - 1U);
-    return expected == raw[PLATLINK_PACKET_SIZE - 1U];
-}
-
 /* Serialiserer pakkestruktur og sjekker header og CRC-8 */
 bool platlink_validate(const platlink_packet_t *pkt) {
     uint8_t raw[PLATLINK_PACKET_SIZE];
