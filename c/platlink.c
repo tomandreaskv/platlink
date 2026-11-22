@@ -1,15 +1,12 @@
 /**
  * @file platlink.c
- * @brief Implementasjon av PlatLink v1.0 kjernefunksjoner.
- *
- * Alle funksjoner er skrevet uten dynamisk allokering (ingen malloc/free) og
- * bruker eksplisitt byte-skifting for å være uavhengige av arkitekturens
- * egen endianness og alignment-krav.
+ * @brief Implementasjon av PlatLink v1.1 kjernefunksjoner og byte-strømleser.
  */
 
 #include "platlink.h"
+#include <string.h>
 
-/* Bitvis CRC-8 over len byte med polynom 0x07 og init 0x00. */
+/* Bitvis CRC-8 over len byte med polynom 0x07 og init 0x00 */
 uint8_t platlink_crc8(const uint8_t *data, size_t len) {
     uint8_t crc = PLATLINK_CRC_INIT;
 
@@ -18,21 +15,21 @@ uint8_t platlink_crc8(const uint8_t *data, size_t len) {
     }
 
     for (size_t i = 0; i < len; i++) {
-        crc ^= data[i];
-        /* Skift gjennom alle 8 bit i gjeldende byte */
-        for (uint8_t bit = 0; bit < 8U; bit++) {
+        crc = (uint8_t)(crc ^ data[i]);
+        /* Skift i uint32_t før maskering til uint8_t for å unngå -Wsign-conversion */
+        for (uint8_t bit = 0U; bit < 8U; bit++) {
+            uint32_t shifted = (uint32_t)crc << 1U;
             if ((crc & 0x80U) != 0U) {
-                crc = (uint8_t)((crc << 1) ^ PLATLINK_CRC_POLYNOMIAL);
-            } else {
-                crc = (uint8_t)(crc << 1);
+                shifted ^= (uint32_t)PLATLINK_CRC_POLYNOMIAL;
             }
+            crc = (uint8_t)(shifted & 0xFFU);
         }
     }
 
     return crc;
 }
 
-/* Skriver uint32 i big-endian rekkefølge (MSB først i payload[0]). */
+/* Skriver uint32 som 4 big-endian byte (payload[0] = MSB) */
 void platlink_encode_u32(uint8_t payload[PLATLINK_PAYLOAD_SIZE], uint32_t value) {
     payload[0] = (uint8_t)((value >> 24) & 0xFFU);
     payload[1] = (uint8_t)((value >> 16) & 0xFFU);
@@ -40,7 +37,7 @@ void platlink_encode_u32(uint8_t payload[PLATLINK_PAYLOAD_SIZE], uint32_t value)
     payload[3] = (uint8_t)(value & 0xFFU);
 }
 
-/* Leser 4 big-endian byte og bygger et uint32. */
+/* Leser 4 big-endian byte til uint32 */
 uint32_t platlink_decode_u32(const uint8_t payload[PLATLINK_PAYLOAD_SIZE]) {
     return ((uint32_t)payload[0] << 24) |
            ((uint32_t)payload[1] << 16) |
@@ -48,17 +45,17 @@ uint32_t platlink_decode_u32(const uint8_t payload[PLATLINK_PAYLOAD_SIZE]) {
            ((uint32_t)payload[3]);
 }
 
-/* Koder signert int32 som toerkomplement i big-endian. */
+/* Koder signert int32 (toerkomplement) i big-endian */
 void platlink_encode_i32(uint8_t payload[PLATLINK_PAYLOAD_SIZE], int32_t value) {
     platlink_encode_u32(payload, (uint32_t)value);
 }
 
-/* Dekoder 4 big-endian byte som signert int32. */
+/* Dekoder 4 big-endian byte som signert int32 */
 int32_t platlink_decode_i32(const uint8_t payload[PLATLINK_PAYLOAD_SIZE]) {
     return (int32_t)platlink_decode_u32(payload);
 }
 
-/* Hjelpefunksjon som pakker de første 7 byte i rekkefølge før CRC-8 beregnes. */
+/* Pakker byte 0..6 i trådrekkefølge og beregner CRC-8 */
 static uint8_t compute_packet_crc(const platlink_packet_t *pkt) {
     uint8_t frame[PLATLINK_PACKET_SIZE - 1U];
     frame[0] = pkt->header;
@@ -70,7 +67,7 @@ static uint8_t compute_packet_crc(const platlink_packet_t *pkt) {
     return platlink_crc8(frame, sizeof(frame));
 }
 
-/* Fyller ut header, type_id, sub_id, 4-byte payload og beregner crc8. */
+/* Fyller ut pakkestruktur med startbyte 0xA5 og beregnet CRC-8 */
 void platlink_pack(platlink_packet_t *pkt, uint8_t type_id, uint8_t sub_id,
                    const uint8_t payload[PLATLINK_PAYLOAD_SIZE]) {
     if (pkt == NULL || payload == NULL) {
@@ -86,7 +83,7 @@ void platlink_pack(platlink_packet_t *pkt, uint8_t type_id, uint8_t sub_id,
     pkt->crc8 = compute_packet_crc(pkt);
 }
 
-/* Oppretter pakke med usignert 32-bit nyttelast. */
+/* Oppretter pakke med usignert 32-bit verdi */
 void platlink_create_u32(platlink_packet_t *pkt, uint8_t type_id, uint8_t sub_id,
                          uint32_t value) {
     uint8_t buf[PLATLINK_PAYLOAD_SIZE];
@@ -94,7 +91,7 @@ void platlink_create_u32(platlink_packet_t *pkt, uint8_t type_id, uint8_t sub_id
     platlink_pack(pkt, type_id, sub_id, buf);
 }
 
-/* Oppretter pakke med signert 32-bit nyttelast. */
+/* Oppretter pakke med signert 32-bit verdi */
 void platlink_create_i32(platlink_packet_t *pkt, uint8_t type_id, uint8_t sub_id,
                          int32_t value) {
     uint8_t buf[PLATLINK_PAYLOAD_SIZE];
@@ -102,40 +99,60 @@ void platlink_create_i32(platlink_packet_t *pkt, uint8_t type_id, uint8_t sub_id
     platlink_pack(pkt, type_id, sub_id, buf);
 }
 
-/* Oppretter Fixed32-pakke (format 0x3) for gitt kategori og skalert verdi (* 100). */
+/* Oppretter Fixed32-pakke (format 0x3) fra allerede skalert verdi (* 100) */
 void platlink_create_fixed32_scaled(platlink_packet_t *pkt, uint8_t category,
                                     uint8_t sub_id, int32_t scaled_by_100) {
     uint8_t type_id = platlink_make_typeid(PLATLINK_FMT_FIXED32, category);
     platlink_create_i32(pkt, type_id, sub_id, scaled_by_100);
 }
 
-/* Oppretter Digital-pakke (format 0x1) der payload[3] er 1 for true og 0 for false. */
+/* Oppretter Digital-pakke (format 0x1); payload[0..2] er 0 og payload[3] er 0 eller 1 */
 void platlink_create_digital(platlink_packet_t *pkt, uint8_t category,
                              uint8_t sub_id, bool state) {
     uint8_t type_id = platlink_make_typeid(PLATLINK_FMT_DIGITAL, category);
     platlink_create_u32(pkt, type_id, sub_id, state ? 1U : 0U);
 }
 
-/* Oppretter Analog8-pakke (format 0x2) med 8-bit verdi plassert i payload[3]. */
+/* Oppretter Analog8-pakke (format 0x2); payload[0..2] er 0 og payload[3] er 0..255 */
 void platlink_create_analog8(platlink_packet_t *pkt, uint8_t category,
                              uint8_t sub_id, uint8_t value) {
     uint8_t type_id = platlink_make_typeid(PLATLINK_FMT_ANALOG8, category);
     platlink_create_u32(pkt, type_id, sub_id, (uint32_t)value);
 }
 
-/* Sjekker at første byte er 0xA5 og at CRC-8 over byte 0..6 matcher byte 7. */
+/* Sjekker at payload[0..2] er null for 1-byte formater (Digital og Analog8) */
+static bool has_valid_padding(const uint8_t raw[PLATLINK_PACKET_SIZE]) {
+    uint8_t fmt = platlink_get_format(raw[1]);
+    if (fmt == PLATLINK_FMT_DIGITAL || fmt == PLATLINK_FMT_ANALOG8) {
+        if (raw[3] != 0x00U || raw[4] != 0x00U || raw[5] != 0x00U) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Sjekker header (0xA5), padding-regler og CRC-8 (byte 0..6 mot byte 7) */
 bool platlink_validate_bytes(const uint8_t raw[PLATLINK_PACKET_SIZE]) {
-    if (raw == NULL) {
+    if (raw == NULL || raw[0] != PLATLINK_HEADER) {
         return false;
     }
-    if (raw[0] != PLATLINK_HEADER) {
+    if (!has_valid_padding(raw)) {
         return false;
     }
     uint8_t expected = platlink_crc8(raw, PLATLINK_PACKET_SIZE - 1U);
     return expected == raw[PLATLINK_PACKET_SIZE - 1U];
 }
 
-/* Serialiserer pakken til bytes og kjører standard byte-validering. */
+/* Sjekker header (0xA5) og CRC-8 (byte 0..6 mot byte 7) på rå 8-byte buffer */
+bool platlink_validate_bytes(const uint8_t raw[PLATLINK_PACKET_SIZE]) {
+    if (raw == NULL || raw[0] != PLATLINK_HEADER) {
+        return false;
+    }
+    uint8_t expected = platlink_crc8(raw, PLATLINK_PACKET_SIZE - 1U);
+    return expected == raw[PLATLINK_PACKET_SIZE - 1U];
+}
+
+/* Serialiserer pakkestruktur og sjekker header og CRC-8 */
 bool platlink_validate(const platlink_packet_t *pkt) {
     uint8_t raw[PLATLINK_PACKET_SIZE];
     if (pkt == NULL) {
@@ -145,7 +162,7 @@ bool platlink_validate(const platlink_packet_t *pkt) {
     return platlink_validate_bytes(raw);
 }
 
-/* Kopierer feltene fra struct til flat 8-byte buffer i protokollrekkefølge. */
+/* Serialiserer pakkestruktur til flat 8-byte buffer i trådrekkefølge */
 void platlink_to_bytes(const platlink_packet_t *pkt, uint8_t out[PLATLINK_PACKET_SIZE]) {
     if (pkt == NULL || out == NULL) {
         return;
@@ -159,7 +176,7 @@ void platlink_to_bytes(const platlink_packet_t *pkt, uint8_t out[PLATLINK_PACKET
     out[7] = pkt->crc8;
 }
 
-/* Validerer innkommende 8-byte buffer og fyller ut platlink_packet_t ved suksess. */
+/* Validerer og pakker ut rå 8-byte buffer til platlink_packet_t */
 bool platlink_from_bytes(platlink_packet_t *pkt, const uint8_t raw[PLATLINK_PACKET_SIZE]) {
     if (pkt == NULL || !platlink_validate_bytes(raw)) {
         return false;
@@ -172,4 +189,68 @@ bool platlink_from_bytes(platlink_packet_t *pkt, const uint8_t raw[PLATLINK_PACK
     }
     pkt->crc8 = raw[7];
     return true;
+}
+
+/* Nullstiller strømleseren til ventende header-tilstand */
+void platlink_reader_init(platlink_reader_t *reader) {
+    if (reader == NULL) {
+        return;
+    }
+    memset(reader, 0, sizeof(*reader));
+    reader->state = PLATLINK_READER_WAIT_HEADER;
+    reader->index = 0U;
+}
+
+/*
+ * Ved feil CRC kan enten selve rammen være korrupt eller et byte ha gått tapt,
+ * slik at starten på neste ramme allerede ligger inne i buf[1..index-1].
+ * Vi leter etter første 0xA5 etter indeks 0 og forskyver restbytes til start.
+ */
+static void platlink_reader_resync(platlink_reader_t *reader) {
+    for (size_t i = 1U; i < reader->index; i++) {
+        if (reader->buf[i] == PLATLINK_HEADER) {
+            size_t remaining = reader->index - i;
+            memmove(reader->buf, &reader->buf[i], remaining);
+            reader->index = remaining;
+            reader->state = PLATLINK_READER_COLLECT_BODY;
+            return;
+        }
+    }
+
+    reader->index = 0U;
+    reader->state = PLATLINK_READER_WAIT_HEADER;
+}
+
+/* Mater én byte inn i strømleseren; returnerer true når en gyldig 8-byte ramme er klar */
+bool platlink_reader_feed(platlink_reader_t *reader, uint8_t byte, platlink_packet_t *out_pkt) {
+    if (reader == NULL || out_pkt == NULL) {
+        return false;
+    }
+
+    if (reader->state == PLATLINK_READER_WAIT_HEADER) {
+        if (byte == PLATLINK_HEADER) {
+            reader->buf[0] = byte;
+            reader->index = 1U;
+            reader->state = PLATLINK_READER_COLLECT_BODY;
+        }
+        return false;
+    }
+
+    reader->buf[reader->index] = byte;
+    reader->index++;
+
+    if (reader->index < PLATLINK_PACKET_SIZE) {
+        return false;
+    }
+
+    if (platlink_from_bytes(out_pkt, reader->buf)) {
+        reader->frames_ok++;
+        reader->index = 0U;
+        reader->state = PLATLINK_READER_WAIT_HEADER;
+        return true;
+    }
+
+    reader->crc_errors++;
+    platlink_reader_resync(reader);
+    return false;
 }

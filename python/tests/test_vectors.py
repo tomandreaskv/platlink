@@ -14,6 +14,7 @@ from platlink import (
     CAT_WATER_LEVEL,
     FMT_DIGITAL,
     FMT_FIXED32,
+    FMT_INT32,
     FMT_RAW32,
     FMT_SYSTEM,
     SYS_HEARTBEAT,
@@ -64,6 +65,8 @@ class PlatLinkProtocolTests(unittest.TestCase):
                 fmt = pkt.format_code
                 if fmt == FMT_FIXED32:
                     self.assertAlmostEqual(pkt.as_fixed32_float(), tv["decoded_value"], places=6)
+                elif fmt == FMT_INT32:
+                    self.assertEqual(pkt.as_i32(), tv["decoded_value"])
                 elif fmt in (FMT_RAW32, FMT_SYSTEM):
                     self.assertEqual(pkt.as_u32(), tv["decoded_value"])
                 elif fmt == FMT_DIGITAL:

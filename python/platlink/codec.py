@@ -1,11 +1,11 @@
-"""Koding, dekoding, CRC-8 og pakkehåndtering for PlatLink v1.0.
+"""Koding, dekoding, CRC-8 og pakkehåndtering for PlatLink v1.1.
 
 Rammeformat (8 byte):
-- Byte 0:    Header (0xA5)
-- Byte 1:    TypeID ((format << 4) | category)
-- Byte 2:    SubID  (kanal/endpoint eller system-underkommando/sekvens)
+- Byte 0:     Header (0xA5)
+- Byte 1:     TypeID ((format << 4) | category)
+- Byte 2:     SubID  (kanal/endpoint eller system-underkommando/sekvens)
 - Bytes 3..6: Payload (4 byte big-endian)
-- Byte 7:    CRC8   (CRC-8 over byte 0..6 med polynom 0x07 og init 0x00)
+- Byte 7:     CRC8   (CRC-8 over byte 0..6 med polynom 0x07 og init 0x00)
 """
 
 from __future__ import annotations
@@ -36,18 +36,24 @@ CAT_PH: int = 0x4
 CAT_EC: int = 0x5
 CAT_WATER_LEVEL: int = 0x6
 CAT_PRESSURE: int = 0x7
+CAT_ACTUATOR: int = 0x8
+CAT_POSITION: int = 0x9
 CAT_CUSTOM: int = 0xE
 CAT_SYSTEM: int = 0xF
 
 # Systemmeldinger (TypeID 0xF0..0xFF)
 SYS_HEARTBEAT: int = 0xF0
+SYS_TIMEBASE: int = 0xF1
+SYS_TIME_OFFSET: int = 0xF2
 SYS_DISCOVERY: int = 0xF4
 SYS_OTA_CTRL: int = 0xFC
 SYS_OTA_DATA: int = 0xFD
+SYS_OTA_STATUS: int = 0xFE
 SYS_RESET: int = 0xFF
 
 # OTA-kontroll underkommandoer (SubID for SYS_OTA_CTRL)
 OTA_CMD_INIT: int = 0x01
+OTA_CMD_EXPECTED_CRC: int = 0x02
 OTA_CMD_VERIFY: int = 0x03
 
 _U32_STRUCT = struct.Struct(">I")
@@ -55,7 +61,7 @@ _I32_STRUCT = struct.Struct(">i")
 
 
 class PlatLinkError(ValueError):
-    """Feil som kastes ved ugyldig pakkelengde, header eller CRC-8."""
+    """Feil som kastes ved ugyldig pakkelengde, header, padding eller CRC-8."""
 
 
 def make_type_id(fmt: int, category: int) -> int:
@@ -104,6 +110,16 @@ def decode_i32(payload: bytes | bytearray | memoryview) -> int:
     if len(payload) != PAYLOAD_SIZE:
         raise PlatLinkError(f"Payload må være {PAYLOAD_SIZE} byte, fikk {len(payload)}")
     return _I32_STRUCT.unpack(payload)[0]
+
+
+def _validate_padding(data: bytes) -> None:
+    """Krever at payload[0..2] er 0x00 for 1-byte formater (Digital og Analog8)."""
+    fmt, _ = split_type_id(data[1])
+    if fmt in (FMT_DIGITAL, FMT_ANALOG8):
+        if data[3] != 0 or data[4] != 0 or data[5] != 0:
+            raise PlatLinkError(
+                f"Ugyldig padding for format 0x{fmt:X}: payload[0..2] må være 0x00"
+            )
 
 
 @dataclass(frozen=True)
@@ -217,12 +233,13 @@ def create_analog8(category: int, sub_id: int, value: int) -> PlatLinkPacket:
 
 
 def validate_bytes(raw: bytes | bytearray | memoryview) -> None:
-    """Validerer at rådata har lengde 8, header 0xA5 og gyldig CRC-8."""
+    """Validerer at rådata har lengde 8, header 0xA5, gyldig padding og gyldig CRC-8."""
     data = bytes(raw)
     if len(data) != PACKET_SIZE:
         raise PlatLinkError(f"Pakke må være {PACKET_SIZE} byte, fikk {len(data)}")
     if data[0] != HEADER:
         raise PlatLinkError(f"Ugyldig header: forventet 0x{HEADER:02X}, fikk 0x{data[0]:02X}")
+    _validate_padding(data)
     expected = crc8(data[: PACKET_SIZE - 1])
     actual = data[PACKET_SIZE - 1]
     if expected != actual:

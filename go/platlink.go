@@ -1,4 +1,4 @@
-// Package platlink implementerer koding, dekoding og validering av PlatLink v1.0
+// Package platlink implementerer koding, dekoding og validering av PlatLink v1.1
 // binærpakker (fast 8-byte ramme med 0xA5-header og CRC-8 med polynom 0x07).
 // Pakken er helt avhengighetsfri og bruker kun Go sitt standardbibliotek.
 package platlink
@@ -9,7 +9,7 @@ import (
 	"fmt"
 )
 
-// Protokollkonstanter for PlatLink v1.0.
+// Protokollkonstanter for PlatLink v1.1.
 const (
 	Header         byte    = 0xA5 // Fast startbyte for rammesynkronisering
 	PacketSize     int     = 8    // Fast pakkestørrelse i byte
@@ -37,32 +37,39 @@ const (
 	CatLight       byte = 0x3 // Lys (lux)
 	CatPH          byte = 0x4 // pH-verdi
 	CatEC          byte = 0x5 // Elektrisk konduktivitet (µS/cm)
-	CatWaterLevel  byte = 0x6 // Vannstand (cm)
+	CatWaterLevel  byte = 0x6 // Vannstand / Dybde (cm)
 	CatPressure    byte = 0x7 // Trykk (hPa)
+	CatActuator    byte = 0x8 // Aktuator / Rele
+	CatPosition    byte = 0x9 // Posisjon (deg*1e7)
 	CatCustom      byte = 0xE // Reservert for egne utvidelser
 	CatSystem      byte = 0xF // Systemkategori
 )
 
 // Systemmeldinger (TypeID i området 0xF0..0xFF).
 const (
-	SysHeartbeat byte = 0xF0 // Periodisk livstegn med oppetid i sekunder (uint32)
-	SysDiscovery byte = 0xF4 // Node-annonsering / kapabiliteter
-	SysOTACtrl   byte = 0xFC // OTA-kontroll (SubID angir underkommando)
-	SysOTAData   byte = 0xFD // OTA-firmwaredata (SubID = chunk/sekvens, 4B data)
-	SysReset     byte = 0xFF // Tilbakestillingskommando
+	SysHeartbeat  byte = 0xF0 // Periodisk livstegn med oppetid i sekunder (uint32)
+	SysTimebase   byte = 0xF1 // Felles tidsreferanse
+	SysTimeOffset byte = 0xF2 // Relativt millisekund-offset siden siste Timebase
+	SysDiscovery  byte = 0xF4 // Node-annonsering / kapabiliteter
+	SysOTACtrl    byte = 0xFC // OTA-kontroll (SubID angir underkommando)
+	SysOTAData    byte = 0xFD // OTA-firmwaredata (SubID = chunk/sekvens, 4B data)
+	SysOTAStatus  byte = 0xFE // OTA-status
+	SysReset      byte = 0xFF // Tilbakestillingskommando
 )
 
 // OTA-underkommandoer for SubID når TypeID er SysOTACtrl (0xFC).
 const (
-	OTACmdInit   byte = 0x01 // Start OTA-økt; payload = firmwarestørrelse i byte
-	OTACmdVerify byte = 0x03 // Verifiser OTA-overføring; payload = forventet CRC32
+	OTACmdInit        byte = 0x01 // Start OTA-økt; payload = firmwarestørrelse i byte
+	OTACmdExpectedCRC byte = 0x02 // Forventet CRC32
+	OTACmdVerify      byte = 0x03 // Verifiser OTA-overføring; payload = forventet CRC32
 )
 
 // Vanlige feil ved validering og parsing av PlatLink-pakker.
 var (
-	ErrInvalidLength = errors.New("platlink: pakke må være nøyaktig 8 byte")
-	ErrInvalidHeader = errors.New("platlink: ugyldig header (forventet 0xA5)")
-	ErrInvalidCRC    = errors.New("platlink: ugyldig CRC-8 sjekksum")
+	ErrInvalidLength  = errors.New("platlink: pakke må være nøyaktig 8 byte")
+	ErrInvalidHeader  = errors.New("platlink: ugyldig header (forventet 0xA5)")
+	ErrInvalidPadding = errors.New("platlink: ugyldig padding (payload[0..2] må være 0x00)")
+	ErrInvalidCRC     = errors.New("platlink: ugyldig CRC-8 sjekksum")
 )
 
 // Packet representerer en dekodet eller ferdigpakket 8-byte PlatLink-ramme.
@@ -98,6 +105,16 @@ func CRC8(data []byte) byte {
 		}
 	}
 	return crc
+}
+
+func hasValidPadding(raw []byte) bool {
+	fmtCode, _ := SplitTypeID(raw[1])
+	if fmtCode == FmtDigital || fmtCode == FmtAnalog8 {
+		if raw[3] != 0x00 || raw[4] != 0x00 || raw[5] != 0x00 {
+			return false
+		}
+	}
+	return true
 }
 
 // Pack bygger en komplett Packet fra typeID, subID og 4-byte payload, og beregner CRC-8.
@@ -147,13 +164,16 @@ func CreateAnalog8(category, subID byte, value byte) Packet {
 	return CreateUint32(typeID, subID, uint32(value))
 }
 
-// ValidateBytes sjekker at rådata har lengde 8, header 0xA5 og gyldig CRC-8.
+// ValidateBytes sjekker at rådata har lengde 8, header 0xA5, gyldig padding og gyldig CRC-8.
 func ValidateBytes(raw []byte) error {
 	if len(raw) != PacketSize {
 		return ErrInvalidLength
 	}
 	if raw[0] != Header {
 		return ErrInvalidHeader
+	}
+	if !hasValidPadding(raw) {
+		return ErrInvalidPadding
 	}
 	expected := CRC8(raw[:PacketSize-1])
 	if expected != raw[PacketSize-1] {

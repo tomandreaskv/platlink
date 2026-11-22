@@ -103,6 +103,14 @@ func TestProtocolVectorsFromJSON(t *testing.T) {
 				if math.Abs(gotFloat-wantFloat) > 1e-9 {
 					t.Errorf("Fixed32Float = %v, forventet %v", gotFloat, wantFloat)
 				}
+			case platlink.FmtInt32:
+				wantNum, ok := tv.DecodedValue.(float64)
+				if !ok {
+					t.Fatalf("forventet numerisk decoded_value for Int32, fikk %T", tv.DecodedValue)
+				}
+				if pkt.Int32() != int32(wantNum) {
+					t.Errorf("Int32 = %d, forventet %d", pkt.Int32(), int32(wantNum))
+				}
 			case platlink.FmtRaw32, platlink.FmtSystem:
 				wantNum, ok := tv.DecodedValue.(float64)
 				if !ok {
@@ -119,6 +127,8 @@ func TestProtocolVectorsFromJSON(t *testing.T) {
 				if pkt.Digital() != wantBool {
 					t.Errorf("Digital = %v, forventet %v", pkt.Digital(), wantBool)
 				}
+			default:
+				t.Fatalf("uventet formatkode i testvektor: 0x%X", pkt.Format())
 			}
 
 			roundtrip := pkt.ToBytes()

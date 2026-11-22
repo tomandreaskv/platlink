@@ -1,9 +1,10 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "packet": {
     "size_bytes": 8,
     "header": "0xA5",
     "endianness": "big",
+    "strict_padding_zero": true,
     "crc8": {
       "polynomial": "0x07",
       "init": "0x00",
@@ -13,14 +14,14 @@
     "layout": [
       { "index": 0, "name": "header", "size": 1, "description": "Start byte (0xA5)" },
       { "index": 1, "name": "type_id", "size": 1, "description": "(format << 4) | category" },
-      { "index": 2, "name": "sub_id", "size": 1, "description": "Channel/endpoint ID or system subcommand/seq" },
+      { "index": 2, "name": "sub_id", "size": 1, "description": "Channel/endpoint ID (0x00..0xDF) or control/status subcommand (0xE0..0xFF)" },
       { "index": [3, 6], "name": "payload", "size": 4, "description": "4-byte big-endian payload" },
       { "index": 7, "name": "crc8", "size": 1, "description": "CRC-8 over bytes 0..6" }
     ]
   },
   "formats": {
-    "0x1": { "name": "Digital", "key": "digital", "payload_type": "bool", "scale": 1, "description": "Boolean state (0=false, 1=true) in payload[3]" },
-    "0x2": { "name": "Analog8", "key": "analog8", "payload_type": "uint8", "scale": 1, "description": "Unsigned 8-bit value (0..255) in payload[3]" },
+    "0x1": { "name": "Digital", "key": "digital", "payload_type": "bool", "scale": 1, "description": "Boolean state (0=false, 1=true) in payload[3]; payload[0..2] must be 0x00" },
+    "0x2": { "name": "Analog8", "key": "analog8", "payload_type": "uint8", "scale": 1, "description": "Unsigned 8-bit value (0..255) in payload[3]; payload[0..2] must be 0x00" },
     "0x3": { "name": "Fixed32", "key": "fixed32", "payload_type": "int32", "scale": 100, "description": "Signed 32-bit integer divided by 100" },
     "0x4": { "name": "Raw32", "key": "raw32", "payload_type": "uint32", "scale": 1, "description": "Unsigned 32-bit integer" },
     "0x5": { "name": "Int32", "key": "int32", "payload_type": "int32", "scale": 1, "description": "Signed 32-bit integer" },
@@ -32,17 +33,31 @@
     "0x3": { "name": "Lys", "key": "light", "unit": "lux", "default_format": "0x4" },
     "0x4": { "name": "pH", "key": "ph", "unit": "pH", "default_format": "0x3" },
     "0x5": { "name": "EC", "key": "ec", "unit": "µS/cm", "default_format": "0x3" },
-    "0x6": { "name": "Vannstand", "key": "water_level", "unit": "cm", "default_format": "0x4" },
+    "0x6": { "name": "Vannstand / Dybde", "key": "water_level", "unit": "cm", "default_format": "0x4" },
     "0x7": { "name": "Trykk", "key": "pressure", "unit": "hPa", "default_format": "0x3" },
+    "0x8": { "name": "Aktuator / Rele", "key": "actuator", "unit": "", "default_format": "0x1" },
+    "0x9": { "name": "Posisjon", "key": "position", "unit": "deg*1e7", "default_format": "0x5" },
     "0xE": { "name": "Utvidelse", "key": "custom", "unit": "", "default_format": "0x4" },
     "0xF": { "name": "System", "key": "system", "unit": "", "default_format": "0xF" }
   },
+  "profiles": {
+    "0x01": { "name": "Climate & Light", "key": "climate_light" },
+    "0x02": { "name": "Soil & Water Level", "key": "soil_water" },
+    "0x03": { "name": "Scale & Tank", "key": "scale_tank" },
+    "0x04": { "name": "Water Quality", "key": "water_quality" },
+    "0x05": { "name": "Dosing", "key": "dosing" },
+    "0x06": { "name": "Actuator Hub", "key": "actuator_hub" },
+    "0x07": { "name": "USV / Bathymetry", "key": "usv_bathymetry" }
+  },
   "system_messages": {
     "0xF0": { "name": "Heartbeat", "key": "heartbeat", "description": "Uptime in seconds (uint32)" },
-    "0xF4": { "name": "Discovery", "key": "discovery", "description": "Node announcement / capability info" },
-    "0xFC": { "name": "OTA Control", "key": "ota_ctrl", "description": "SubID: 0x01=Init (size), 0x03=Verify (crc32)" },
-    "0xFD": { "name": "OTA Data", "key": "ota_data", "description": "SubID: sequence/chunk index, 4-byte firmware chunk" },
-    "0xFF": { "name": "Reset", "key": "reset", "description": "Node reset command" }
+    "0xF1": { "name": "Timebase", "key": "timebase", "description": "Shared time reference (SubID 0x00=Unix epoch s, 0x01=boot/mission ms)" },
+    "0xF2": { "name": "TimeOffset", "key": "time_offset", "description": "Relative millisecond offset since last Timebase for backfilled logs" },
+    "0xF4": { "name": "Discovery", "key": "discovery", "description": "SubID 0x00=Req, 0x01=Resp; payload[0..1]=node_id, payload[2]=proto_ver (0x11), payload[3]=profile_id" },
+    "0xFC": { "name": "OTA Control", "key": "ota_ctrl", "description": "SubID: 0x01=Init (size+node_id), 0x02=ExpectedCRC (crc32), 0x03=Verify (crc32)" },
+    "0xFD": { "name": "OTA Data", "key": "ota_data", "description": "SubID: chunk index (0..63), 4-byte firmware chunk" },
+    "0xFE": { "name": "OTA Status", "key": "ota_status", "description": "SubID: 0x20=ACK (next_offset), 0x21=Ready, 0xE1=NAK (expected_offset), 0xE2=CRC Error" },
+    "0xFF": { "name": "Reset", "key": "reset", "description": "SubID 0x00=SafeStop, 0x01=Reboot; payload[0..1]=target_node_id, payload[2..3]=0x5AA5" }
   },
   "test_vectors": [
     {
@@ -101,15 +116,26 @@
       "unit": "cm"
     },
     {
-      "name": "Digital ON (0x1F)",
-      "hex": "A51F050000000165",
+      "name": "Actuator Relay ON (0x18)",
+      "hex": "A518000000000157",
       "valid": true,
-      "type_id": "0x1F",
-      "sub_id": "0x05",
+      "type_id": "0x18",
+      "sub_id": "0x00",
       "format": "0x1",
-      "category": "0xF",
+      "category": "0x8",
       "decoded_value": true,
       "unit": ""
+    },
+    {
+      "name": "Latitude 60.1550000 deg (Int32 deg*1e7)",
+      "hex": "A5590023DAECB0F5",
+      "valid": true,
+      "type_id": "0x59",
+      "sub_id": "0x00",
+      "format": "0x5",
+      "category": "0x9",
+      "decoded_value": 601550000,
+      "unit": "deg*1e7"
     },
     {
       "name": "System Heartbeat 3600s (0xF0)",
@@ -125,6 +151,11 @@
     {
       "name": "Invalid CRC8",
       "hex": "A53101000008CD00",
+      "valid": false
+    },
+    {
+      "name": "Invalid Digital Padding",
+      "hex": "A51800000100013C",
       "valid": false
     }
   ]
